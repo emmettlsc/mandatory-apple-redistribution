@@ -1,0 +1,21 @@
+ffmpeg hook - intercepts video decode calls
+
+compile:
+gcc -fPIC -shared -o ffmpeg_hook.so ffmpeg_hook.c -ldl
+
+run with chrome:
+LD_PRELOAD=./ffmpeg_hook.so google-chrome
+
+run with firefox:
+LD_PRELOAD=./ffmpeg_hook.so firefox
+
+run with mpv:
+LD_PRELOAD=./ffmpeg_hook.so mpv somevideo.mp4
+
+notes:
+- works on any system that uses ffmpeg/libavcodec (most browsers, mpv, vlc, etc)
+- doesn't need gpu drivers or vaapi
+- avcodec_send_packet gets compressed video data
+- avcodec_receive_frame gets decoded frames
+- to hijack: intercept packets and replace with bad apple h264 data
+- or intercept frames and replace with bad apple yuv frames
