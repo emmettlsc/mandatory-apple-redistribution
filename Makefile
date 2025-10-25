@@ -3,7 +3,7 @@ CC=gcc
 CFLAGS=-fPIC -shared -Wall -g -O0
 LIBS=-lva -lva-drm -ldl
 TARGET=vaapi_logger.so
-SOURCE=vaapi_logger.c
+SOURCE=vaapi-logger.c
 
 all: $(TARGET)
 
