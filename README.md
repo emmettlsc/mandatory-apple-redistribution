@@ -1,1 +1,1 @@
-# everything-is-bad-apple
+# mandatory-apple-redistribution
