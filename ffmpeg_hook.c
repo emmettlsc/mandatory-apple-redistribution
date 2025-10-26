@@ -4,14 +4,14 @@
 #include <stdlib.h>
 #include <string.h>
 
-// AVFrame structure - minimal fields we need
+// AVFrame structure 
 typedef struct AVFrame {
     uint8_t *data[8];
     int linesize[8];
     int width;
     int height;
     int format;
-    // other fields exist but we don't care
+    // other fields exist but we don't care???
 } AVFrame;
 
 // counters
@@ -39,57 +39,74 @@ int avcodec_send_packet(void* avctx, void* avpkt) {
     return real_avcodec_send_packet(avctx, avpkt);
 }
 
-// replace frame with static bad apple frame
+// replace frame with static bad apple frame (rn we just nuke it)
 void replace_with_bad_apple(AVFrame* frame) {
-    if (!frame->data[0] || frame->width <= 0 || frame->height <= 0) {
+    printf("[DEBUG] replace_with_bad_apple called\n");
+    printf("[DEBUG] frame ptr: %p\n", frame);
+    printf("[DEBUG] frame->data[0]: %p\n", frame->data[0]);
+    printf("[DEBUG] frame->width: %d, height: %d\n", frame->width, frame->height);
+    printf("[DEBUG] frame->format: %d\n", frame->format);
+
+    if (!frame->data[0]) {
+        printf("[DEBUG] no data[0], skipping\n");
         return;
     }
 
-    // YUV420P format (most common)
-    // Y plane is full res, U and V are half res
+    if (frame->width <= 0 || frame->height <= 0) {
+        printf("[DEBUG] invalid dimensions, skipping\n");
+        return;
+    }
+
+    printf("[DEBUG] starting replacement...\n");
+
+    // just nuke everything to full white
     int y_size = frame->linesize[0] * frame->height;
-    int uv_height = frame->height / 2;
-    int u_size = frame->linesize[1] * uv_height;
-    int v_size = frame->linesize[2] * uv_height;
 
-    // fill with black (Y=16, U=128, V=128 in limited range YUV)
-    if (frame->data[0]) memset(frame->data[0], 16, y_size);
-    if (frame->data[1]) memset(frame->data[1], 128, u_size);
-    if (frame->data[2]) memset(frame->data[2], 128, v_size);
+    printf("[DEBUG] filling Y plane with white (size: %d)\n", y_size);
+    memset(frame->data[0], 255, y_size);
 
-    // draw white rectangle in center (Y=235 for white)
-    int rect_w = frame->width / 3;
-    int rect_h = frame->height / 3;
-    int start_x = (frame->width - rect_w) / 2;
-    int start_y = (frame->height - rect_h) / 2;
-
-    for (int y = start_y; y < start_y + rect_h; y++) {
-        if (y >= 0 && y < frame->height) {
-            memset(frame->data[0] + y * frame->linesize[0] + start_x, 235, rect_w);
-        }
+    // set U and V to neutral if they exist <-- ?? llm said this was needed
+    if (frame->data[1] && frame->data[2]) {
+        int uv_height = frame->height / 2;
+        int u_size = frame->linesize[1] * uv_height;
+        int v_size = frame->linesize[2] * uv_height;
+        printf("[DEBUG] filling U/V planes (sizes: %d, %d)\n", u_size, v_size);
+        memset(frame->data[1], 128, u_size);
+        memset(frame->data[2], 128, v_size);
     }
 
     replaced_count++;
+    printf("[DEBUG] replacement done! count: %d\n", replaced_count);
 }
 
 // hook avcodec_receive_frame - called when decoder outputs a frame
 int avcodec_receive_frame(void* avctx, void* frame) {
+    printf("[HOOK] avcodec_receive_frame called\n");
+
     if (!real_avcodec_receive_frame) {
+        printf("[HOOK] finding real avcodec_receive_frame...\n");
         real_avcodec_receive_frame = dlsym(RTLD_NEXT, "avcodec_receive_frame");
         if (!real_avcodec_receive_frame) {
             fprintf(stderr, "failed to find real avcodec_receive_frame\n");
             return -1;
         }
+        printf("[HOOK] found real function at %p\n", real_avcodec_receive_frame);
     }
 
+    printf("[HOOK] calling real avcodec_receive_frame...\n");
     int ret = real_avcodec_receive_frame(avctx, frame);
+    printf("[HOOK] real function returned: %d\n", ret);
 
     if (ret == 0) {
         frame_count++;
-        printf("[ffmpeg hook] frame #%d decoded - REPLACING WITH BAD APPLE\n", frame_count);
+        printf("\n=== [HOOK] FRAME #%d DECODED - REPLACING NOW ===\n", frame_count);
 
         // replace the frame data
         replace_with_bad_apple((AVFrame*)frame);
+
+        printf("=== [HOOK] REPLACEMENT COMPLETE ===\n\n");
+    } else {
+        printf("[HOOK] ret != 0, not replacing (ret=%d)\n", ret);
     }
 
     return ret;
