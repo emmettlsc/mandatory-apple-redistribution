@@ -23,11 +23,20 @@ static int packet_count = 0;
 static int frame_count = 0;
 static int replaced_count = 0;
 
+// bad apple info
+// found the vid on gh, forgot the link...
+static uint8_t* bad_apple_data = NULL;
+static size_t bad_apple_size = 0;
+static int bad_apple_width = 640;
+static int bad_apple_height = 480;
+static int bad_apple_frame_size = 0;
+static int bad_apple_num_frames = 0;
+
 // function pointers to real functions
 static int (*real_avcodec_send_packet)(void*, void*) = NULL;
 static int (*real_avcodec_receive_frame)(void*, void*) = NULL;
 
-// hook avcodec_send_packet - called when compressed video packet is sent to decoder
+// hook avcodec_send_packet -> called when compressed video packet is sent to decoder
 int avcodec_send_packet(void* avctx, void* avpkt) {
     if (!real_avcodec_send_packet) {
         real_avcodec_send_packet = dlsym(RTLD_NEXT, "avcodec_send_packet");
@@ -43,47 +52,92 @@ int avcodec_send_packet(void* avctx, void* avpkt) {
     return real_avcodec_send_packet(avctx, avpkt);
 }
 
-// replace frame with static bad apple frame (rn we just nuke it)
-void replace_with_bad_apple(AVFrame* frame) {
-    printf("[DEBUG] replace_with_bad_apple called\n");
-    printf("[DEBUG] frame ptr: %p\n", frame);
-    printf("[DEBUG] frame->data[0]: %p\n", frame->data[0]);
-    printf("[DEBUG] frame->width: %d, height: %d\n", frame->width, frame->height);
-    printf("[DEBUG] frame->format: %d\n", frame->format);
-
-    if (!frame->data[0]) {
-        printf("[DEBUG] no data[0], skipping\n");
+// load bad apple frames
+void load_bad_apple_frames() {
+    FILE* f = fopen("./badapple/badapple_raw.yuv", "rb");
+    if (!f) {
+        printf("[ERROR] cant open badapple_raw.yuv\n");
         return;
     }
 
-    if (frame->width <= 0 || frame->height <= 0) {
-        printf("[DEBUG] invalid dimensions, skipping\n");
+    fseek(f, 0, SEEK_END);
+    bad_apple_size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    bad_apple_data = malloc(bad_apple_size);
+    if (!bad_apple_data) {
+        printf("[ERROR] cant allocate memory for bad apple\n");
+        fclose(f);
         return;
     }
 
-    printf("[DEBUG] starting replacement...\n");
+    size_t read = fread(bad_apple_data, 1, bad_apple_size, f);
+    fclose(f);
 
-    // just nuke everything to full white
-    int y_size = frame->linesize[0] * frame->height;
+    // yuv420p frame size = width * height * 1.5
+    bad_apple_frame_size = bad_apple_width * bad_apple_height * 3 / 2;
+    bad_apple_num_frames = bad_apple_size / bad_apple_frame_size;
 
-    printf("[DEBUG] filling Y plane with white (size: %d)\n", y_size);
-    memset(frame->data[0], 255, y_size);
-
-    // set U and V to neutral if they exist <-- ?? llm said this was needed
-    if (frame->data[1] && frame->data[2]) {
-        int uv_height = frame->height / 2;
-        int u_size = frame->linesize[1] * uv_height;
-        int v_size = frame->linesize[2] * uv_height;
-        printf("[DEBUG] filling U/V planes (sizes: %d, %d)\n", u_size, v_size);
-        memset(frame->data[1], 128, u_size);
-        memset(frame->data[2], 128, v_size);
-    }
-
-    replaced_count++;
-    printf("[DEBUG] replacement done! count: %d\n", replaced_count);
+    printf("[BAD APPLE] loaded %zu bytes, %d frames at %dx%d\n",
+           bad_apple_size, bad_apple_num_frames, bad_apple_width, bad_apple_height);
 }
 
-// hook avcodec_receive_frame - called when decoder outputs a frame
+// replace frame with bad apple frame
+void replace_with_bad_apple(AVFrame* frame) {
+    if (!frame->data[0] || frame->width <= 0 || frame->height <= 0) {
+        return;
+    }
+
+    if (!bad_apple_data) {
+        printf("[DEBUG] no bad apple data loaded, skipping\n");
+        return;
+    }
+
+    // cycle through bad apple frames 
+    int ba_frame_idx = replaced_count % bad_apple_num_frames;
+    uint8_t* ba_frame = bad_apple_data + (ba_frame_idx * bad_apple_frame_size);
+
+    // bad apple is 640x480, source might be different
+    // for now just copy what fits
+    int copy_width = frame->width < bad_apple_width ? frame->width : bad_apple_width;
+    int copy_height = frame->height < bad_apple_height ? frame->height : bad_apple_height;
+
+    // Y plane
+    uint8_t* ba_y = ba_frame;
+    for (int y = 0; y < copy_height; y++) {
+        memcpy(frame->data[0] + y * frame->linesize[0],
+               ba_y + y * bad_apple_width,
+               copy_width);
+    }
+
+    // U plane
+    if (frame->data[1]) {
+        uint8_t* ba_u = ba_frame + (bad_apple_width * bad_apple_height);
+        int uv_copy_width = copy_width / 2;
+        int uv_copy_height = copy_height / 2;
+        for (int y = 0; y < uv_copy_height; y++) {
+            memcpy(frame->data[1] + y * frame->linesize[1],
+                   ba_u + y * (bad_apple_width / 2),
+                   uv_copy_width);
+        }
+    }
+
+    // V plane
+    if (frame->data[2]) {
+        uint8_t* ba_v = ba_frame + (bad_apple_width * bad_apple_height) + (bad_apple_width * bad_apple_height / 4);
+        int uv_copy_width = copy_width / 2;
+        int uv_copy_height = copy_height / 2;
+        for (int y = 0; y < uv_copy_height; y++) {
+            memcpy(frame->data[2] + y * frame->linesize[2],
+                   ba_v + y * (bad_apple_width / 2),
+                   uv_copy_width);
+        }
+    }
+    //YUVVVV
+    replaced_count++;
+}
+
+// hook avcodec_receive_frame -> called when decoder outputs a frame
 int avcodec_receive_frame(void* avctx, void* frame) {
     printf("[HOOK] avcodec_receive_frame called\n");
 
@@ -122,6 +176,8 @@ void init() {
     printf("pid: %d\n", getpid());
     printf("watching avcodec_send_packet and avcodec_receive_frame\n");
     printf("========================\n\n");
+
+    load_bad_apple_frames();
 }
 
 __attribute__((destructor))
@@ -131,4 +187,8 @@ void cleanup() {
     printf("frames: %d\n", frame_count);
     printf("frames replaced: %d\n", replaced_count);
     printf("===========================\n");
+
+    if (bad_apple_data) {
+        free(bad_apple_data);
+    }
 }

@@ -3,10 +3,14 @@ ffmpeg hook - intercepts video decode calls
 compile:
 gcc -fPIC -shared -o ffmpeg_hook.so ffmpeg_hook.c -ldl
 
-currenly status: 
-- replaces every frame with a static bad apple frame (black with white rectangle)
+currently status:
+- replaces every frame with bad apple frames (cycling through them)
 
-test it works (download a video first):
+setup bad apple frames:
+wget https://archive.org/download/bad-apple-video/badapple.mp4 -O badapple.mp4
+ffmpeg -i badapple.mp4 -vf scale=640:480 -pix_fmt yuv420p -f rawvideo badapple_raw.yuv
+
+test it works (download a test video first):
 wget https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4 -O test.mp4
 LD_PRELOAD=./ffmpeg_hook.so ffmpeg -i test.mp4 -f null -
 
