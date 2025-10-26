@@ -1,0 +1,7 @@
+misc/
+*~
+\#*
+*.bak
+*.orig
+*.rej
+.DS_Store

@@ -1,0 +1,70 @@
+ffmpeg hook - intercepts video decode calls
+
+compile:
+gcc -fPIC -shared -o ffmpeg_hook.so ffmpeg_hook.c -ldl
+
+currently status:
+- replaces every frame with bad apple frames (cycling through them)
+
+setup bad apple frames:
+wget https://archive.org/download/bad-apple-video/badapple.mp4 -O badapple.mp4
+ffmpeg -i badapple.mp4 -vf scale=640:480 -pix_fmt yuv420p -f rawvideo badapple_raw.yuv
+
+test it works (download a test video first):
+wget https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4 -O test.mp4
+LD_PRELOAD=./ffmpeg_hook.so ffmpeg -i test.mp4 -f null -
+
+or with ffplay if you have display:
+LD_PRELOAD=./ffmpeg_hook.so ffplay test.mp4
+
+for chrome (THE MAIN GOAL - youtube bad apple hijack):
+sudo apt install chromium-browser
+LD_PRELOAD=/home/ubuntu/mandatory-apple-redistribution/ffmpeg_hook.so google-chrome
+
+for youtube specifically:
+LD_PRELOAD=/home/ubuntu/mandatory-apple-redistribution/ffmpeg_hook.so chromium-browser --disable-gpu-sandbox --no-sandbox https://youtube.com
+
+-- some llm advice on chrome troubleshooting --
+troubleshooting chrome:
+
+if counters stay at 0:
+- chrome might be using its bundled ffmpeg instead of system ffmpeg
+- check with: ldd /usr/lib/chromium-browser/chromium-browser | grep libav
+- chrome ships with its own libavcodec inside the chrome binary
+- solution: hook libchrome.so or find chrome's internal libavcodec
+
+to find chrome's ffmpeg:
+find /opt/google/chrome /usr/lib/chromium* -name "*ffmpeg*" -o -name "*libav*" 2>/dev/null
+
+if chrome has bundled codec:
+- need to LD_PRELOAD the symbols before chrome loads its own
+- or patch chrome's ffmpeg directly (harder)
+- or hook at a different level (see below)
+
+alternative approaches for chrome:
+
+1. hook GPU/rendering layer instead
+   - intercept glTexImage2D or similar opengl calls
+   - replace texture data with bad apple frames
+   - works after decode so dont need to deal with codecs
+
+2. hook chrome media pipeline
+   - chrome uses media::VideoDecoder internally
+   - harder to hook but more reliable
+   - need to find chrome's symbol table
+
+3. use chrome extension
+   - inject javascript that replaces video elements
+   - way easier but less funny
+
+my advice:
+- test with chromium first (better symbol visibility than chrome)
+- if chromium works but chrome doesnt, chrome bundles everything
+- for youtube demo, chromium is fine
+- bundled ffmpeg in chrome is a known issue for LD_PRELOAD hooks
+
+next steps for bad apple hijack:
+- get hook working in chromium
+- load bad apple video frames into memory
+- in avcodec_receive_frame, replace frame->data with bad apple
+- or in avcodec_send_packet, replace packet data with bad apple h264
