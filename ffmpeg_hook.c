@@ -3,15 +3,19 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 
-// AVFrame structure 
-typedef struct AVFrame {
+// real AVFrame layout from ffmpeg
+// dont use the typedef, just access the fields we need by offset
+typedef struct {
     uint8_t *data[8];
     int linesize[8];
-    int width;
-    int height;
+    // extended_data comes here
+    uint8_t **extended_data;
+    int width, height;
+    int nb_samples;
     int format;
-    // other fields exist but we don't care???
+    // more fields but we dont care
 } AVFrame;
 
 // counters
