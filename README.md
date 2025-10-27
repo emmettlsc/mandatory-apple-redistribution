@@ -1,4 +1,4 @@
-mandatory apple redistribution 
+## Mandatory Apple Redistribution 
 
 A for funsies hack that intercepts video rendering calls made by any process, replaces displayed frames with Bad Apple (a meme to get this music video to play on anything, now you can only play it)
 
