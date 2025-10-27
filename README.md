@@ -2,6 +2,9 @@
 
 A for funsies hack that intercepts video rendering calls made by any process, replaces displayed frames with Bad Apple (a meme to get this music video to play on anything, now you can only play it)
 
+## Demo
+https://youtu.be/g1PGuWuTxwA
+
 ## Inspiration
 We wanted to hack something pointless but technically cool - like getting doom to run on a calculator. A few popular libs do all the heavy lifting for video but no one messes with them directly. So we thought: what if we could hijack any video and force it to play Bad Apple instead (ie imagine you go to Canvas to watch the latest recorded lecture drop for the class you keep sleeping through, you click on the video and it seems like your professor uploaded Bad Apple?? Then you go to YouTube to watch the latest KRAZAM drop, an ad pops up and it's Bad Apple, you think "what are the chances of that happening" then you click skip ad and it seems like KRAZAM uploaded a music video too????). This is also a less popular meme than the "play doom on X" but if you search youtube you will find hundreds of videos of playing bad apple on X (where X is something like a pregnancy test or an apple), well now you have no choice to play bad apple on everything
 
